@@ -14,6 +14,14 @@
 extern "C" {
 #endif
 
+typedef struct wasmtime_dylink_meminfo_t
+{
+    uint32_t mem_size;
+    uint32_t mem_align;
+    uint32_t table_size;
+    uint32_t table_align;
+} wasmtime_dylink_meminfo_t;
+
 /**
  * \typedef wasmtime_module_t
  * \brief Convenience alias for #wasmtime_module
@@ -58,6 +66,8 @@ WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);
  * internal reference count.
  */
 WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
+
+WASM_API_EXTERN bool wasmtime_module_dylink_meminfo(const wasmtime_module_t *, wasmtime_dylink_meminfo_t *out);
 
 /**
  * \brief Same as #wasm_module_imports, but for #wasmtime_module_t.

@@ -14,8 +14,8 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FunctionLoc, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, DylinkInfo, FunctionLoc, ModuleEnvironment,
+    ModuleTranslation, ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, WasmFunctionInfo,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
@@ -742,6 +742,11 @@ impl Module {
 
     pub(crate) fn signatures(&self) -> &SignatureCollection {
         self.inner.code.signatures()
+    }
+
+    /// Returns the dylink info of this module
+    pub fn dylink_info(&self) -> Option<DylinkInfo> {
+        self.env_module().dylink_info
     }
 
     /// Returns identifier/name that this [`Module`] has. This name

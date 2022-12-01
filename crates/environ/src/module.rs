@@ -742,6 +742,19 @@ impl Default for TableInitialization {
     }
 }
 
+/// A WebAssembly dylink info.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default)]
+pub struct DylinkInfo {
+    /// Size of the memory area the loader should reserve for the module.
+    pub memory_size: u32,
+    /// The required alignment of the memory area, in bytes, encoded as a power of 2.
+    pub memory_align: u32,
+    /// Size of the table area the loader should reserve for the module.
+    pub table_size: u32,
+    /// The required alignment of the table area, in elements.
+    pub table_align: u32,
+}
+
 /// Different types that can appear in a module.
 ///
 /// Note that each of these variants are intended to index further into a
@@ -826,6 +839,9 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
+
+    /// WebAssembly dylink info.
+    pub dylink_info: Option<DylinkInfo>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,

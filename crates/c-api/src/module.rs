@@ -149,6 +149,31 @@ pub extern "C" fn wasmtime_module_clone(module: &wasmtime_module_t) -> Box<wasmt
     Box::new(module.clone())
 }
 
+#[repr(C)]
+#[derive(Clone)]
+pub struct wasmtime_dylink_meminfo_t {
+    pub mem_size: u32,
+    pub mem_align: u32,
+    pub table_size: u32,
+    pub table_align: u32,
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_dylink_meminfo(
+    module: &wasmtime_module_t,
+    out: &mut wasmtime_dylink_meminfo_t,
+) -> bool {
+    if let Some(info) = module.module.dylink_info() {
+        out.mem_size = info.memory_size;
+        out.mem_align = info.memory_align;
+        out.table_size = info.table_size;
+        out.table_align = info.table_align;
+        true
+    } else {
+        false
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn wasmtime_module_exports(
     module: &wasmtime_module_t,

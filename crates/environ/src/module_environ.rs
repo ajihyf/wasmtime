@@ -3,7 +3,7 @@ use crate::module::{
     ModuleType, TableInitializer, TablePlan,
 };
 use crate::{
-    DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
+    DataIndex, DefinedFuncIndex, DylinkInfo, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
     GlobalIndex, GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
     TableIndex, TableInitialization, Tunables, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 use std::sync::Arc;
+use wasmparser::BinaryReader;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItem, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
@@ -619,20 +620,18 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 // the passive count, do not reserve anything here.
             }
 
-            Payload::CustomSection(s) if s.name() == "name" => {
-                let result = NameSectionReader::new(s.data(), s.data_offset())
-                    .map_err(|e| e.into())
-                    .and_then(|s| self.name_section(s));
-                if let Err(e) = result {
-                    log::warn!("failed to parse name section {:?}", e);
+            Payload::CustomSection(s) => match s.name() {
+                "name" => {
+                    let result = NameSectionReader::new(s.data(), s.data_offset())
+                        .map_err(|e| e.into())
+                        .and_then(|s| self.name_section(s));
+                    if let Err(e) = result {
+                        log::warn!("failed to parse name section {:?}", e);
+                    }
                 }
-            }
-
-            Payload::CustomSection(s)
-                if s.name() == "webidl-bindings" || s.name() == "wasm-interface-types" =>
-            {
-                return Err(WasmError::Unsupported(
-                    "\
+                "webidl-bindings" | "wasm-interface-types" => {
+                    return Err(WasmError::Unsupported(
+                        "\
 Support for interface types has temporarily been removed from `wasmtime`.
 
 For more information about this temporary change you can read on the issue online:
@@ -643,13 +642,21 @@ and for re-adding support for interface types you can see this issue:
 
     https://github.com/bytecodealliance/wasmtime/issues/677
 "
-                    .to_string(),
-                ))
-            }
+                        .to_string(),
+                    ))
+                }
+                "dylink.0" => {
+                    let reader = BinaryReader::new_with_offset(s.data(), s.data_offset());
 
-            Payload::CustomSection(s) => {
-                self.register_dwarf_section(&s);
-            }
+                    if let Err(e) = self.dylink_section(reader) {
+                        log::warn!("failed to parse name section {:?}", e);
+                    }
+                }
+                n if n.starts_with(".debug_") => {
+                    self.register_dwarf_section(&s);
+                }
+                _ => {}
+            },
 
             // It's expected that validation will probably reject other
             // payloads such as `UnknownSection` or those related to the
@@ -663,11 +670,33 @@ and for re-adding support for interface types you can see this issue:
         Ok(())
     }
 
+    fn dylink_section(&mut self, mut reader: BinaryReader<'data>) -> WasmResult<()> {
+        while !reader.eof() {
+            let subsection_id = reader.read_u8()?;
+            let payload_len = reader.read_var_u32()? as usize;
+            let data = reader.read_bytes(payload_len)?;
+            const WASM_DYLINK_MEM_INFO: u8 = 1;
+            if subsection_id == WASM_DYLINK_MEM_INFO {
+                let mut reader = wasmparser::BinaryReader::new(data);
+                let memory_size = reader.read_var_u32()?;
+                let memory_align = reader.read_var_u32()?;
+                let table_size = reader.read_var_u32()?;
+                let table_align = reader.read_var_u32()?;
+
+                self.result.module.dylink_info = Some(DylinkInfo {
+                    memory_size,
+                    memory_align,
+                    table_size,
+                    table_align,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     fn register_dwarf_section(&mut self, section: &CustomSectionReader<'data>) {
         let name = section.name();
-        if !name.starts_with(".debug_") {
-            return;
-        }
         if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
             self.result.has_unparsed_debuginfo = true;
             return;
